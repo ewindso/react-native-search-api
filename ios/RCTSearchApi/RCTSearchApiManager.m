@@ -12,6 +12,7 @@
 #import "RCTSearchApiManager.h"
 #import "NSDictionary+RCTSearchApi.h"
 #import <React/RCTUtils.h>
+#import <Photos/Photos.h>
 
 static NSString *const kHandleContinueUserActivityNotification = @"handleContinueUserActivity";
 static NSString *const kUserActivityKey = @"userActivity";
@@ -98,6 +99,41 @@ RCT_EXPORT_METHOD(indexItem:(NSDictionary *)item resolve:(RCTPromiseResolveBlock
     return [self indexItems:@[item] resolve:resolve reject:reject];
 }
 
+RCT_EXPORT_METHOD(indexItemWithAsset:(NSString *)localIdentifier andItem:(NSDictionary *)item resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
+    
+    
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        PHFetchResult<PHAsset *> *assets = [PHAsset fetchAssetsWithLocalIdentifiers:@[localIdentifier] options:nil];
+        
+        __weak PHImageManager *imageManager = [PHImageManager defaultManager];
+        
+        @autoreleasepool {
+            
+            [assets enumerateObjectsUsingBlock:^(PHAsset * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+                PHImageRequestOptions *options = [[PHImageRequestOptions alloc]init];
+                options.networkAccessAllowed = YES;
+                options.synchronous = YES;
+                options.resizeMode = PHImageRequestOptionsResizeModeExact;
+                
+                [imageManager requestImageDataForAsset:obj options:options resultHandler:^(NSData * _Nullable imageData, NSString * _Nullable dataUTI, UIImageOrientation orientation, NSDictionary * _Nullable info) {
+                    
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        
+                        CSSearchableItemAttributeSet *attributeSet = [self contentAttributeSetFromItem:item];
+                        attributeSet.thumbnailData = imageData;
+                        
+                        CSSearchableItem *searchableItem = [[CSSearchableItem alloc] initWithUniqueIdentifier:item.rctsa_uniqueIdentifier
+                                                                                             domainIdentifier:item.rctsa_domain
+                                                                                                 attributeSet:attributeSet];
+                        [[CSSearchableIndex defaultSearchableIndex] indexSearchableItems:@[searchableItem] completionHandler:[self completionBlockWithResolve:resolve reject:reject]];
+                    });
+                }];
+            }];
+        }
+    });
+    
+}
+
 RCT_EXPORT_METHOD(indexItems:(NSArray *)items resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
     NSMutableArray *itemsToIndex = [NSMutableArray array];
     [items enumerateObjectsUsingBlock:^(NSDictionary *item, NSUInteger idx, BOOL * _Nonnull stop) {
@@ -106,7 +142,7 @@ RCT_EXPORT_METHOD(indexItems:(NSArray *)items resolve:(RCTPromiseResolveBlock)re
                                                                                  attributeSet:[self contentAttributeSetFromItem:item]];
         [itemsToIndex addObject:searchableItem];
     }];
-    [[CSSearchableIndex defaultSearchableIndex] indexSearchableItems:itemsToIndex completionHandler:[self completionBlockWithResolve:resolve reject:reject]];  
+    [[CSSearchableIndex defaultSearchableIndex] indexSearchableItems:itemsToIndex completionHandler:[self completionBlockWithResolve:resolve reject:reject]];
 }
 
 RCT_EXPORT_METHOD(deleteItemsWithIdentifiers:(NSArray *)identifiers resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
@@ -176,6 +212,7 @@ RCT_EXPORT_METHOD(createUserActivity:(NSDictionary *)item resolve:(RCTPromiseRes
     attributeSet.contentDescription = item.rctsa_contentDescription;
     attributeSet.keywords = item.rctsa_keywords;
     attributeSet.thumbnailURL = item.rctsa_thumbnailURL;
+    
     return attributeSet;
 }
 

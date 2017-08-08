@@ -121,6 +121,10 @@ class SearchApi extends NativeEventEmitter {
         return SearchApiManager.indexItem(item);
     }
 
+    indexSpotlightItemWithAsset(localIdentifier, item: Object): Promise {
+        return SearchApiManager.indexItemWithAsset(localIdentifier, item)
+    }
+
     /**
      * Adds an array of new items to the spotlight index.
      *
